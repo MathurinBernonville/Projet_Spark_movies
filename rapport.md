@@ -1,4 +1,4 @@
-# Rapport projet jour 4 — Pipeline Spark MovieLens
+# Rapport projet jour 4 - Pipeline Spark MovieLens
 
 **Auteur :** Mathurin Bernonville  
 **Date :** 26 juin 2026  
@@ -12,8 +12,8 @@
 MovieLens small contient les notes de films données par des utilisateurs, avec une table de référence des films et leurs genres.
 
 Deux fichiers sources :
-- `ratings.csv` — 100 836 lignes : `userId`, `movieId`, `rating`, `timestamp`
-- `movies.csv` — 9 742 lignes : `movieId`, `title`, `genres`
+- `ratings.csv` - 100 836 lignes : `userId`, `movieId`, `rating`, `timestamp`
+- `movies.csv` - 9 742 lignes : `movieId`, `title`, `genres`
 
 Schéma cible après nettoyage (couche silver) :
 
@@ -29,9 +29,9 @@ Schéma cible après nettoyage (couche silver) :
 
 ## 2. Pipeline
 
-### Bronze → Silver
+### Bronze -> Silver
 
-Lecture de `ratings.csv` avec un schéma explicite (StructType). J'ai volontairement évité `inferSchema` qui peut mal typer des colonnes sur du CSV — ici le timestamp serait probablement lu comme string.
+Lecture de `ratings.csv` avec un schéma explicite (StructType). J'ai volontairement évité `inferSchema` qui peut mal typer des colonnes sur du CSV : ici le timestamp serait probablement lu comme string.
 
 Transformations :
 - Conversion du timestamp Unix en date (`to_timestamp`), puis extraction de l'année
@@ -39,19 +39,19 @@ Transformations :
 - Déduplication sur `(userId, movieId)`
 - Suppression des nulls (`na.drop`)
 
-Résultat : 100 836 lignes → 100 836 lignes. Les données MovieLens sont déjà propres, aucune ligne écartée.
+Résultat : 100 836 lignes -> 100 836 lignes. Les données MovieLens sont déjà propres, aucune ligne écartée.
 
 Écriture en Parquet partitionné par `annee` (~30 valeurs distinctes). Ce choix de partitionnement est testé dans la partie exploration.
 
-### Silver → Gold
+### Silver -> Gold
 
-Relecture de la couche silver Parquet. `df_ratings` est mis en cache avant les 3 analyses car il est réutilisé à chaque fois — sans ça, Spark relirait le Parquet 3 fois depuis le disque. Le `count()` qui suit le `cache()` force la matérialisation immédiate.
+Relecture de la couche silver Parquet. `df_ratings` est mis en cache avant les 3 analyses car il est réutilisé à chaque fois. Sans ça, Spark relirait le Parquet 3 fois depuis le disque. Le `count()` qui suit le `cache()` force la matérialisation immédiate.
 
 ---
 
 ## 3. Analyses
 
-### Analyse 1 — Films les mieux notés (agrégation)
+### Analyse 1 - Films les mieux notés (agrégation)
 
 Quels films ont la meilleure note moyenne, avec un minimum de 50 notes ?
 
@@ -74,7 +74,7 @@ Le film 318 (The Shawshank Redemption) arrive en tête avec 4.43/5 sur 317 votes
 
 ---
 
-### Analyse 2 — Note moyenne par genre (jointure broadcast)
+### Analyse 2 - Note moyenne par genre (jointure broadcast)
 
 Quels genres obtiennent les meilleures notes en moyenne ?
 
@@ -86,11 +86,11 @@ df_ratings.join(F.broadcast(df_movies), on="movieId", how="inner")
 
 `movies.csv` fait ~9 700 lignes, c'est la candidate naturelle pour un broadcast. Sans ça, Spark devrait shuffler les deux tables pour les aligner sur `movieId`. Durée mesurée : 0.86s.
 
-Le résultat brut montre des combinaisons de genres très spécifiques avec 1 seule note à 5.0 en tête du classement — même problème qu'en analyse 1, un seuil de votes minimum serait nécessaire pour une lecture fiable.
+Le résultat brut montre des combinaisons de genres très spécifiques avec 1 seule note à 5.0 en tête du classement. Même problème qu'en analyse 1, un seuil de votes minimum serait nécessaire pour une lecture fiable.
 
 ---
 
-### Analyse 3 — Top 5 par genre (window function)
+### Analyse 3 - Top 5 par genre (window function)
 
 Quel est le meilleur film de chaque genre, parmi ceux ayant au moins 20 notes ?
 
@@ -116,9 +116,9 @@ La window function évite d'avoir à faire un `groupBy` + jointure avec un sous-
 
 Deux optimisations dans le pipeline :
 
-**Cache sur df_ratings** — réutilisé par les 3 analyses. La Spark UI le confirme : les jobs après matérialisation montrent `InMemoryTableScan` dans le DAG au lieu d'une lecture Parquet.
+**Cache sur df_ratings** : réutilisé par les 3 analyses. La Spark UI le confirme : les jobs après matérialisation montrent `InMemoryTableScan` dans le DAG au lieu d'une lecture Parquet.
 
-**Broadcast join sur movies** — 9 700 lignes diffusées à chaque executor, pas de shuffle côté movies. Durée de l'analyse 2 : 0.86s. Sans broadcast, la jointure aurait impliqué un shuffle des 100 836 lignes de ratings pour les aligner avec movies.
+**Broadcast join sur movies** : 9 700 lignes diffusées à chaque executor, pas de shuffle côté movies. Durée de l'analyse 2 : 0.86s. Sans broadcast, la jointure aurait impliqué un shuffle des 100 836 lignes de ratings pour les aligner avec movies.
 
 ---
 
@@ -130,7 +130,7 @@ Deux optimisations dans le pipeline :
 
 ![Stages pipeline](2.png)
 
-Le stage 56 montre 1671.2 KiB en Shuffle Read et 1888.4 KiB en Shuffle Write — c'est l'agrégation par genre qui redistribue les données entre partitions.
+Le stage 56 montre 1671.2 KiB en Shuffle Read et 1888.4 KiB en Shuffle Write. C'est l'agrégation par genre qui redistribue les données entre partitions.
 
 ![DAG](3.png)
 
@@ -138,7 +138,7 @@ Le nœud `Exchange` est le point de shuffle. En amont, `InMemoryTableScan` confi
 
 ---
 
-## 6. Exploration — partition pruning
+## 6. Exploration - partition pruning
 
 J'ai testé l'impact du partitionnement par `annee` sur les temps de lecture. Le principe : quand on filtre sur la colonne de partitionnement, Spark peut ignorer physiquement les répertoires des autres valeurs sans lire les fichiers.
 
@@ -157,9 +157,9 @@ PartitionFilters: [isnotnull(annee#25), (annee#25 = 2015)]
 
 ![Spark UI exploration](4.png)
 
-Job 1 sans filtre — 12 tasks en 0.6s ; Job 4 avec filtre — 1 task en 31ms.
+Job 1 sans filtre : 12 tasks en 0.6s. Job 4 avec filtre : 1 task en 31ms.
 
-Le gain de 90.5% sur un volume aussi petit est déjà significatif. Sur un dataset de plusieurs Go partitionné par mois, l'effet serait encore plus marqué — c'est pour ça que le choix de la colonne de partitionnement est une vraie décision d'architecture.
+Le gain de 90.5% sur un volume aussi petit est déjà significatif. Sur un dataset de plusieurs Go partitionné par mois, l'effet serait encore plus marqué. C'est pour ça que le choix de la colonne de partitionnement est une vraie décision d'architecture.
 
 ---
 
@@ -167,10 +167,10 @@ Le gain de 90.5% sur un volume aussi petit est déjà significatif. Sur un datas
 
 Ce que j'ai retenu de ce projet :
 
-Le schéma explicite sur CSV vaut vraiment la peine d'être systématique — `inferSchema` est pratique mais peu fiable sur des colonnes ambiguës. Le cache n'a de sens que si le DataFrame est réellement réutilisé plusieurs fois, et il faut le matérialiser avec un `count()` immédiatement sinon Spark peut le recalculer à la demande. Le broadcast join est une optimisation simple à mettre en place dès qu'une table est petite.
+Le schéma explicite sur CSV vaut vraiment la peine d'être systématique : `inferSchema` est pratique mais peu fiable sur des colonnes ambiguës. Le cache n'a de sens que si le DataFrame est réellement réutilisé plusieurs fois, et il faut le matérialiser avec un `count()` immédiatement sinon Spark peut le recalculer à la demande. Le broadcast join est une optimisation simple à mettre en place dès qu'une table est petite.
 
 Limites :
 
-MovieLens small est trop petit pour vraiment stresser Spark — les temps sont dominés par l'overhead JVM, pas par le volume de données. Les mesures de performance seraient plus fiables moyennées sur plusieurs runs.
+MovieLens small est trop petit pour vraiment stresser Spark : les temps sont dominés par l'overhead JVM, pas par le volume de données. Les mesures de performance seraient plus fiables moyennées sur plusieurs runs.
 
 L'encodage des genres en chaîne unique (`Action|Adventure`) crée des milliers de combinaisons distinctes et rend l'analyse par genre peu exploitable en l'état. Un `explode(split(genres, "\\|"))` normaliserait ça et donnerait des résultats plus propres.
