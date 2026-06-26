@@ -1,6 +1,6 @@
 # Rapport projet jour 4 - Pipeline Spark MovieLens
 
-**Auteur :** Mathurin Bernonville  
+**Auteurs :** Alexandre Breville & Mathurin Bernonville  
 **Date :** 26 juin 2026  
 **Dataset :** MovieLens small (ml-latest-small)  
 **Environnement :** Spark 4.1.2, PySpark, mode local, WSL2 Ubuntu 24.04
